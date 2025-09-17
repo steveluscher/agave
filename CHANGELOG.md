@@ -29,6 +29,7 @@ Release channels have their own copy of this changelog:
 #### Breaking
 * Added a `slot` property to `EpochRewardsPeriodActiveErrorData`
 * Added error data containing a `slot` property to `RpcCustomError::SlotNotEpochBoundary`
+* `PubsubClient` can now be constructed with the URI of an RPC (as a `str`, `String`, or `Uri`) as well as an `http::Request<()>`. The addition of `Request` allows you to set request headers when establishing a websocket connection with an RPC. This is a breaking change because where `&str` used to be allowed as an input, you must now supply `str`.
 
 #### Changes
 * The subscription server now prioritizes processing received messages before sending out responses. This ensures that new subscription requests and time-sensitive messages like `PING` opcodes take priority over notifications.
