@@ -89,6 +89,7 @@
 pub use crate::nonblocking::pubsub_client::PubsubClientError;
 use {
     crossbeam_channel::{unbounded, Receiver, Sender},
+    http::Request,
     log::*,
     serde::de::DeserializeOwned,
     serde_json::{
@@ -121,6 +122,7 @@ use {
         thread::{sleep, JoinHandle},
         time::Duration,
     },
+    tungstenite::client::IntoClientRequest,
     tungstenite::{connect, stream::MaybeTlsStream, Message, WebSocket},
     url::Url,
 };
@@ -303,12 +305,16 @@ pub type RootSubscription = (PubsubRootClientSubscription, Receiver<Slot>);
 /// See the [module documentation][self].
 pub struct PubsubClient {}
 
-fn connect_with_retry(
-    url: Url,
-) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, Box<tungstenite::Error>> {
+fn connect_with_retry<R>(
+    request: R,
+) -> Result<WebSocket<MaybeTlsStream<TcpStream>>, Box<tungstenite::Error>>
+where
+    R: IntoClientRequest,
+{
     let mut connection_retries = 5;
+    let client_request = request.into_client_request().map_err(Box::new)?;
     loop {
-        let result = connect(url.clone()).map(|(socket, _)| socket);
+        let result = connect(client_request.clone()).map(|(socket, _)| socket);
         if let Err(tungstenite::Error::Http(response)) = &result {
             if response.status() == http::StatusCode::TOO_MANY_REQUESTS && connection_retries > 0 {
                 let mut duration = Duration::from_millis(500);
@@ -346,13 +352,15 @@ impl PubsubClient {
     /// This method corresponds directly to the [`accountSubscribe`] RPC method.
     ///
     /// [`accountSubscribe`]: https://solana.com/docs/rpc/websocket/accountsubscribe
-    pub fn account_subscribe(
-        url: &str,
+    pub fn account_subscribe<R>(
+        request: R,
         pubkey: &Pubkey,
         config: Option<RpcAccountInfoConfig>,
-    ) -> Result<AccountSubscription, PubsubClientError> {
-        let url = Url::parse(url)?;
-        let socket = connect_with_retry(url)?;
+    ) -> Result<AccountSubscription, PubsubClientError>
+    where
+        R: IntoClientRequest,
+    {
+        let socket = connect_with_retry(request)?;
         let (sender, receiver) = unbounded();
 
         let socket = Arc::new(RwLock::new(socket));
